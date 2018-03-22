@@ -56,13 +56,13 @@ void pachetFileHeader(msg* t, unsigned char currSeq, char *nume) {
     t->len = p.LEN + 2;
 }
 
-void pachetDate(msg* t, unsigned char currSeq, char date[MAXL]) {
+void pachetDate(msg* t, unsigned char currSeq, char date[MAXL], int length) {
     struct Pachet p;
     p.SOH = 1;
     p.LEN = MAXL + 7 - 2;
     p.SEQ = currSeq;
     p.TYPE = 'D';
-    strncpy(p.DATA, date, MAXL);
+    memcpy(p.DATA, date, length);
     p.CHECK = crc16_ccitt(&p, p.LEN - 1);
     p.MARK = 0x0D;
 
@@ -70,12 +70,30 @@ void pachetDate(msg* t, unsigned char currSeq, char date[MAXL]) {
     t->len = p.LEN + 2;
 }
 
-void pachetEOF(msg* t) {
+void pachetEOF(msg* t, unsigned char currSeq) {
+    struct Pachet p;
+    p.SOH = 1;
+    p.LEN = MAXL + 7 - 2;
+    p.SEQ = currSeq;
+    p.TYPE = 'Z';
+    p.CHECK = crc16_ccitt(&p, p.LEN - 1);
+    p.MARK = 0x0D;
 
+    memcpy(t->payload, &p, p.LEN + 2);
+    t->len = p.LEN + 2;
 }
 
-void pachetEOT(msg* t) {
+void pachetEOT(msg* t, unsigned char currSeq) {
+    struct Pachet p;
+    p.SOH = 1;
+    p.LEN = MAXL + 7 - 2;
+    p.SEQ = currSeq;
+    p.TYPE = 'B';
+    p.CHECK = crc16_ccitt(&p, p.LEN - 1);
+    p.MARK = 0x0D;
 
+    memcpy(t->payload, &p, p.LEN + 2);
+    t->len = p.LEN + 2;
 }
 
 void tryToReceive(unsigned char* currSeq, msg t, char** argv) {
@@ -83,11 +101,14 @@ void tryToReceive(unsigned char* currSeq, msg t, char** argv) {
     for (rep = 0; rep < 3; rep++)
     {
         msg *y = receive_message_timeout(5000);
-        if (y == NULL) {
+        if (y == NULL || (char)y->payload[3] == 'N') {
             perror("receive error");
-            send_message(&t);
+            if( rep < 2 )
+                send_message(&t);
+            else
+                exit(1);
         } else {
-            printf("[%s] Got reply with payload: %s and sequence number: %hhu and type: %c\n", argv[0], y->payload, y->payload[2], y->payload[3]);
+            printf("[%s] Got reply with sequence number: %hhu and type: %c\n", argv[0], y->payload[2], y->payload[3]);
             (*currSeq)++;
             break;
         }
@@ -128,14 +149,22 @@ int main(int argc, char** argv) {
 
         if (file != NULL)
         {
-            while ((bytesRead = fread(buffer, 1, sizeof(buffer), file) > 0))
+            while (1)
             {
-                int size = strlen(buffer);
-                buffer[size-1] = 0x00;
-                pachetDate(&t, currSeq, buffer);
+                bytesRead = fread(buffer + 1, 1, sizeof(buffer) - 2, file);
+                if( bytesRead <= 0 )
+                    break;
+                buffer[0] = bytesRead;
+                buffer[bytesRead+1] = 0x00; 
+                pachetDate(&t, currSeq, buffer, bytesRead + 1);
                 send_message(&t);
                 tryToReceive(&currSeq, t, argv);
             }
+
+            //"Z"
+            pachetEOF(&t, currSeq);
+            send_message(&t);
+            tryToReceive(&currSeq, t, argv);
         }
         else 
         {
@@ -145,5 +174,10 @@ int main(int argc, char** argv) {
 
         fclose(file);
     }
+    //"B"
+    pachetEOT(&t, currSeq);
+    send_message(&t);
+    tryToReceive(&currSeq, t, argv);
+
     return 0;
 }

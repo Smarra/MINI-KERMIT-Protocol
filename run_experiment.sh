@@ -4,7 +4,7 @@ SPEED=10
 DELAY=10
 LOSS=5
 CORRUPT=20
-FILES=(file0.bin)
+FILES=(file3.bin)
 
 killall link
 killall kreceiver

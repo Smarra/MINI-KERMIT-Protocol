@@ -52,13 +52,16 @@ int main(int argc, char** argv) {
     unsigned char currSeq = 0;
     unsigned char prevSeq = 0;
     char numeFisier[40];
+    unsigned char endOfTransimission = 1;
+
     FILE* f = NULL;
 
     init(HOST, PORT);
 
-    while(1)
+    while(endOfTransimission)
     {
-        if (recv_message(&r) < 0) 
+        if (recv_message(&r) < 0 || 
+           (((unsigned char) r.payload[r.len-2]) << 8) + ((unsigned char) r.payload[r.len-3]) != crc16_ccitt(r.payload, r.len-3)) 
         {
             perror("Receive message");
             pachetNAK(&t, currSeq);
@@ -66,19 +69,29 @@ int main(int argc, char** argv) {
         }
         else
         {
-            printf("[%s] Got msg with payload: %s and sequence number: %hhu and type: %c\n", argv[0], r.payload, r.payload[2], r.payload[3]);
+            printf("[%s] Got msg with sequence number: %hhu and type: %c\n", argv[0], r.payload[2], r.payload[3]);
 
             switch(r.payload[3]) {
                 case 'F':   
                     strcpy(numeFisier, "recv_");
                     strcat(numeFisier, &r.payload[4]);
+                    f = fopen(numeFisier, "w");
+                    fclose(f);
                     f = fopen(numeFisier, "a");
                     break;
 
                 case 'D':
-                    printf("Continut: %s\n", &r.payload[4]);
-                    fprintf(f, "%s", &r.payload[4]);
+                    //printf("Continut: %s\n", &r.payload[5]);
+                    //fprintf(f, "%s", &r.payload[5]);
+                    fwrite(&r.payload[5], sizeof(char), (unsigned char)r.payload[4], f);
+                    break;
+
+                case 'Z':
                     fclose(f);
+                    break;
+
+                case 'B':
+                    endOfTransimission = 0;
                     break;
             }
 
@@ -89,7 +102,6 @@ int main(int argc, char** argv) {
             send_message(&t);
         }
     }
-
 	
 	return 0;
 }
