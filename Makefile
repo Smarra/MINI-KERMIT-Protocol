@@ -12,4 +12,4 @@ kreceiver: kreceiver.o link_emulator/lib.o
 	gcc -Wall -g -c $? 
 
 clean:
-	-rm -f *.o ksender kreceiver 
+	-rm -f *.o ksender kreceiver recv_file* 

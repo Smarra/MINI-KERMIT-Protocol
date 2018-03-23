@@ -10,6 +10,7 @@
 
 #define MAXL 250
 #define TIMEOUT 5
+#define MOD 64
 
 struct Pachet{
     unsigned char SOH;
@@ -49,8 +50,7 @@ void pachetNAK(msg* t, unsigned char currSeq) {
 
 int main(int argc, char** argv) {
     msg r, t;
-    unsigned char currSeq = 0;
-    unsigned char prevSeq = 0;
+    unsigned char currSeq = MOD - 1;
     char numeFisier[40];
     unsigned char endOfTransimission = 1;
 
@@ -61,7 +61,8 @@ int main(int argc, char** argv) {
     while(endOfTransimission)
     {
         if (recv_message(&r) < 0 || 
-           (((unsigned char) r.payload[r.len-2]) << 8) + ((unsigned char) r.payload[r.len-3]) != crc16_ccitt(r.payload, r.len-3)) 
+           (((unsigned char) r.payload[r.len-2]) << 8) + ((unsigned char) r.payload[r.len-3]) != crc16_ccitt(r.payload, r.len-3) ||
+            (currSeq + 1) % MOD != (unsigned char)r.payload[2])
         {
             perror("Receive message");
             pachetNAK(&t, currSeq);
@@ -94,8 +95,6 @@ int main(int argc, char** argv) {
                     endOfTransimission = 0;
                     break;
             }
-
-            prevSeq = currSeq;
             currSeq = r.payload[2];
 
             pachetACK(&t, currSeq);

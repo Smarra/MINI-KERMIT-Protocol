@@ -12,6 +12,7 @@
 
 #define MAXL 250
 #define TIMEOUT 5
+#define MOD 64
 
 struct Pachet{
     unsigned char SOH;
@@ -96,20 +97,22 @@ void pachetEOT(msg* t, unsigned char currSeq) {
     t->len = p.LEN + 2;
 }
 
-void tryToReceive(unsigned char* currSeq, msg t, char** argv) {
+void tryToReceive(unsigned char* prevSeq, unsigned char* currSeq, msg t, char** argv) {
     size_t rep;
-    for (rep = 0; rep < 3; rep++)
+    for (rep = 0; rep < 6; rep++)
     {
         msg *y = receive_message_timeout(5000);
-        if (y == NULL || (char)y->payload[3] == 'N') {
+        if (y == NULL || (char)y->payload[3] == 'N' || (*currSeq != (unsigned char)y->payload[2] || (*currSeq == 0 &&
+                                                                                            (unsigned char)y->payload[2] == 63))) {
             perror("receive error");
-            if( rep < 2 )
+            if( rep < 5 )
                 send_message(&t);
             else
                 exit(1);
         } else {
             printf("[%s] Got reply with sequence number: %hhu and type: %c\n", argv[0], y->payload[2], y->payload[3]);
-            (*currSeq)++;
+            *prevSeq = *currSeq;
+            (*currSeq) = ((*currSeq) + 1) % MOD;
             break;
         }
     }
@@ -118,6 +121,7 @@ void tryToReceive(unsigned char* currSeq, msg t, char** argv) {
 int main(int argc, char** argv) {
     msg t;
     unsigned char currSeq = 0;
+    unsigned char prevSeq = 0;
 
     init(HOST, PORT);
 
@@ -132,12 +136,12 @@ int main(int argc, char** argv) {
         //"S"
         pachetSendInit(&t, currSeq);
         send_message(&t);
-        tryToReceive(&currSeq, t, argv);
+        tryToReceive(&prevSeq, &currSeq, t, argv);
 
         //"F"
         pachetFileHeader(&t, currSeq, argv[i]);
         send_message(&t);
-        tryToReceive(&currSeq, t, argv);
+        tryToReceive(&prevSeq, &currSeq, t, argv);
 
 
         //"D"
@@ -158,13 +162,13 @@ int main(int argc, char** argv) {
                 buffer[bytesRead+1] = 0x00; 
                 pachetDate(&t, currSeq, buffer, bytesRead + 1);
                 send_message(&t);
-                tryToReceive(&currSeq, t, argv);
+                tryToReceive(&prevSeq, &currSeq, t, argv);
             }
 
             //"Z"
             pachetEOF(&t, currSeq);
             send_message(&t);
-            tryToReceive(&currSeq, t, argv);
+            tryToReceive(&prevSeq, &currSeq, t, argv);
         }
         else 
         {
@@ -177,7 +181,7 @@ int main(int argc, char** argv) {
     //"B"
     pachetEOT(&t, currSeq);
     send_message(&t);
-    tryToReceive(&currSeq, t, argv);
+    tryToReceive(&prevSeq, &currSeq, t, argv);
 
     return 0;
 }
