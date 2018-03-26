@@ -4,7 +4,7 @@ SPEED=10
 DELAY=10
 LOSS=5
 CORRUPT=20
-FILES=(file3.bin)
+FILES=(file1.bin file2.bin file3.bin)
 
 killall link
 killall kreceiver
@@ -20,8 +20,8 @@ sleep 1
 echo "==========================="
 for file in "${FILES[@]}"
 do
-	DIFF=$(diff $file recv_$file) 
-	if [ "$DIFF" != "" ] 
+	DIFF=$(diff $file recv_$file)
+	if [ "$DIFF" != "" ]
 	then
 		echo "Files $file and recv_$file are not the same!"
 	fi

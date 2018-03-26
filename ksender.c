@@ -98,17 +98,22 @@ void pachetEOT(msg* t, unsigned char currSeq) {
 }
 
 void tryToReceive(unsigned char* prevSeq, unsigned char* currSeq, msg t, char** argv) {
-    size_t rep;
-    for (rep = 0; rep < 6; rep++)
+    size_t rep, timeoutCounter = 0;
+    while(1)
     {
         msg *y = receive_message_timeout(5000);
-        if (y == NULL || (char)y->payload[3] == 'N' || (*currSeq != (unsigned char)y->payload[2] || (*currSeq == 0 &&
-                                                                                            (unsigned char)y->payload[2] == 63))) {
+        if (y == NULL || (char)y->payload[3] == 'N'  || 
+           (*currSeq != (unsigned char)y->payload[2] || 
+           (*currSeq == 0 && (unsigned char)y->payload[2] == 63))) 
+        {
+            if (y == NULL)
+            {
+                timeoutCounter++;
+                if (timeoutCounter == 3)
+                    exit(1);
+            }
             perror("receive error");
-            if( rep < 5 )
-                send_message(&t);
-            else
-                exit(1);
+            send_message(&t);
         } else {
             printf("[%s] Got reply with sequence number: %hhu and type: %c\n", argv[0], y->payload[2], y->payload[3]);
             *prevSeq = *currSeq;
