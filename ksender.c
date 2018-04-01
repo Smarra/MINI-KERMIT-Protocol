@@ -98,26 +98,31 @@ void pachetEOT(msg* t, unsigned char currSeq) {
 }
 
 void tryToReceive(unsigned char* prevSeq, unsigned char* currSeq, msg t, char** argv) {
-    size_t rep, timeoutCounter = 0;
+    size_t timeoutCounter = 0;
     while(1)
     {
         msg *y = receive_message_timeout(5000);
-        if (y == NULL || (char)y->payload[3] == 'N'  || 
-           (*currSeq != (unsigned char)y->payload[2] || 
-           (*currSeq == 0 && (unsigned char)y->payload[2] == 63))) 
+        if (y == NULL || (char)y->payload[3] == 'N'  ||                 // timeout sau Packet NAK
+           (*currSeq != (unsigned char)y->payload[2] ||                 // secvente diferite de pachete
+           (*currSeq == 0 && (unsigned char)y->payload[2] == 63)))      // verificare pachet de secv. 63 cu pachet de secv. 0
         {
-            if (y == NULL)
+            if (y == NULL)                      // in caz de timeout
             {
-                timeoutCounter++;
-                if (timeoutCounter == 3)
+                timeoutCounter++;               // crestem contorul
+                if (timeoutCounter == 3)        // la 3 contorizari, inchidem aplicatia
                     exit(1);
+                perror("receive sender timeout");
             }
-            perror("receive error");
-            send_message(&t);
+            else
+            {
+                timeoutCounter = 0;             // reactualizam contorul cu 0
+                perror("receive sender error");
+            }
+            send_message(&t);                   // retrimitem pachetul
         } else {
             printf("[%s] Got reply with sequence number: %hhu and type: %c\n", argv[0], y->payload[2], y->payload[3]);
-            *prevSeq = *currSeq;
-            (*currSeq) = ((*currSeq) + 1) % MOD;
+            *prevSeq = *currSeq;                    // actualizez secventa
+            (*currSeq) = ((*currSeq) + 1) % MOD;    
             break;
         }
     }
@@ -125,11 +130,9 @@ void tryToReceive(unsigned char* prevSeq, unsigned char* currSeq, msg t, char** 
 
 int main(int argc, char** argv) {
     msg t;
-    unsigned char currSeq = 0;
-    unsigned char prevSeq = 0;
+    unsigned char currSeq = 0, prevSeq = 0;
 
     init(HOST, PORT);
-
 
     //sprintf(t.payload, "Hello World of PC");
     //t.len = strlen(t.payload);
@@ -138,39 +141,38 @@ int main(int argc, char** argv) {
     size_t i;
     for (i = 1; i < argc; i++)
     {
-        //"S"
+        // Pachet Send-Init
         pachetSendInit(&t, currSeq);
         send_message(&t);
         tryToReceive(&prevSeq, &currSeq, t, argv);
 
-        //"F"
+        // Pachet File-Header
         pachetFileHeader(&t, currSeq, argv[i]);
         send_message(&t);
         tryToReceive(&prevSeq, &currSeq, t, argv);
 
 
-        //"D"
+        // Pachet Data
         FILE* file = NULL;
         char buffer[MAXL];
         size_t bytesRead = 0;
 
         file = fopen(argv[i], "rb");
-
         if (file != NULL)
         {
-            while (1)
+            while (1)            
             {
                 bytesRead = fread(buffer + 1, 1, sizeof(buffer) - 2, file);
-                if( bytesRead <= 0 )
+                if( bytesRead <= 0 )                                // citim pana cand fisierul este epuizat
                     break;
-                buffer[0] = bytesRead;
-                buffer[bytesRead+1] = 0x00; 
+                buffer[0] = bytesRead;                              // numar de bytes cititi
+                buffer[bytesRead+1] = 0x00;                         // null terminator
                 pachetDate(&t, currSeq, buffer, bytesRead + 1);
                 send_message(&t);
                 tryToReceive(&prevSeq, &currSeq, t, argv);
             }
 
-            //"Z"
+            //Pachet "End Of File" (EOF)
             pachetEOF(&t, currSeq);
             send_message(&t);
             tryToReceive(&prevSeq, &currSeq, t, argv);
@@ -183,7 +185,7 @@ int main(int argc, char** argv) {
 
         fclose(file);
     }
-    //"B"
+    // Pachet "End of Transmission" (EOT)
     pachetEOT(&t, currSeq);
     send_message(&t);
     tryToReceive(&prevSeq, &currSeq, t, argv);

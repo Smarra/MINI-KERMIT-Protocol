@@ -1,0 +1,45 @@
+-------------------------- Tema 1 PC - Smarandoiu Andrei --------------------------------
+
+Structuri de date:
+	Am elaborat fiecare tip de pachete intr-o structura comuna numita "Pachet". Pentru
+	fiecare pachet, am elaborat cate o functie cu nume specific pentru definirea campurilor
+	din structura de date.
+	
+Ciclu de transmisie:
+	Sender-ul functioneaza intr-un ciclu de transmiterea pe rand in functie de pachet, in
+	ordinea urmatoare:
+
+	for_each file in files
+		1. Send-init
+		2. File-header
+		3. Data (in pachete cu campul de date de dim. MAXL)
+		4. EOF
+	5. EOT
+
+	OBS! In caz ca un pachet este primit in mai mult de TIMEOUT secunde, campul CHECK
+		 nu corepsunde cu suma de control al pachetului sau numerele de secventa nu corespund, 
+		 acesta este retransmis la receiver. La 3 timeout-uri consecutive, aplicatia este 
+		 oprita.
+
+	Receiver-ul functioneaza intr-un ciclu infinit, pana cand acesta primeste un pachet
+	de tipul EOT. Pentru fiecare pahcet primit, se actulizeaza campurile de date specifice
+	si se aplica operatiile necesare:
+
+	send-init    : actualizeaza variabila timeout si maxl
+	file-header  : actualizeaza variabila fileName utila la creearea fisierului
+	data         : apendeaza la fisier fiecare chunk de date primit
+	EOF          : inchide modului de scriere in fisier
+
+Functia de verificare suma de control:
+((unsigned char) r.payload[r.len-2]) << 8) + ((unsigned char) r.payload[r.len-3]) != crc16_ccitt(r.payload, r.len-3)
+
+	#((unsigned char) r.payload[r.len-2]) << 8) + ((unsigned char) r.payload[r.len-3]) 
+		-> returneaza numarul in format short a campului CHECK reprezentat in little endian in momentul
+		   transmisiei datelor in payload
+	#crc16_ccitt(r.payload, r.len-3)
+		-> creeaza suma de control a pachetului (fara campul CHECK si MARK)
+
+Utilitare folosite:
+	fread - > citirea de chunk-uri de bytes dintr-un fisier, intr-un buffer, returnand numarul
+			  de bytes folositi
+	fwrite -> scrierea de chunk-uri de bytes dintr-un buffer intr-un fisier

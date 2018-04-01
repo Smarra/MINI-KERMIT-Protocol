@@ -50,21 +50,22 @@ void pachetNAK(msg* t, unsigned char currSeq) {
 
 int main(int argc, char** argv) {
     msg r, t;
-    unsigned char currSeq = MOD - 1;
-    char numeFisier[40];
-    unsigned char endOfTransimission = 1;
-
     FILE* f = NULL;
+    unsigned char currSeq = MOD - 1, endOfTransimission = 1;
+    char numeFisier[40];
 
     init(HOST, PORT);
 
     while(endOfTransimission)
     {
-        if (recv_message(&r) < 0 || 
+        if (recv_message(&r) < 0 ||     
            (((unsigned char) r.payload[r.len-2]) << 8) + ((unsigned char) r.payload[r.len-3]) != crc16_ccitt(r.payload, r.len-3) ||
             (currSeq + 1) % MOD != (unsigned char)r.payload[2])
+            // mesajul nu este primit corect, campul CHECK nu corespunde cu suma de control a pachetului sau numarul de secventa
+            // al pachetului nu corespunde cu numarul de secventa asteptat
         {
-            perror("Receive message");
+            // Pachet ACK
+            perror("Receive receiver error");
             pachetNAK(&t, currSeq);
             send_message(&t);
         }
@@ -72,18 +73,15 @@ int main(int argc, char** argv) {
         {
             printf("[%s] Got msg with sequence number: %hhu and type: %c\n", argv[0], r.payload[2], r.payload[3]);
 
+            // switch dupa campul TYPE
             switch(r.payload[3]) {
-                case 'F':   
+                case 'F':
                     strcpy(numeFisier, "recv_");
-                    strcat(numeFisier, &r.payload[4]);
-                    f = fopen(numeFisier, "w");
-                    fclose(f);
-                    f = fopen(numeFisier, "a");
+                    strcat(numeFisier, &r.payload[4]);      // numeFisier <- recv_(numeHeader)
+                    f = fopen(numeFisier, "w");             // deschid fisierul cu modul "write"
                     break;
 
                 case 'D':
-                    //printf("Continut: %s\n", &r.payload[5]);
-                    //fprintf(f, "%s", &r.payload[5]);
                     fwrite(&r.payload[5], sizeof(char), (unsigned char)r.payload[4], f);
                     break;
 
